@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  compose:
+    name: compose
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: Validar el compose
+        run: docker compose config --quiet
+      - name: Levantar las bases y Vault
+        run: docker compose up -d --wait
+      - name: Comprobar que Vault guarda un secreto por servicio
+        run: |
+          for service in orders catalog; do
+            docker compose exec -T vault vault kv get -field=DB_USERNAME "secret/plaza/$service/db" > /dev/null
+            echo "El secreto de $service está cargado."
+          done
+      - name: Comprobar que cada base acepta sus credenciales
+        run: |
+          docker compose exec -T orders-db psql -U orders -d orders -tc 'select 1' > /dev/null
+          docker compose exec -T catalog-db psql -U catalog -d catalog -tc 'select 1' > /dev/null
+          echo "Las dos bases responden."
+      - name: Bajar el compose
+        if: always()
+        run: docker compose down -v
