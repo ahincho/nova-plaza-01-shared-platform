@@ -21,7 +21,7 @@ jobs:
         run: docker compose up -d --wait
       - name: Comprobar que Vault guarda un secreto por servicio
         run: |
-          for service in orders catalog; do
+          for service in orders catalog payments; do
             docker compose exec -T vault vault kv get -field=DB_USERNAME "secret/plaza/$service/db" > /dev/null
             echo "El secreto de $service está cargado."
           done
@@ -29,7 +29,8 @@ jobs:
         run: |
           docker compose exec -T orders-db psql -U orders -d orders -tc 'select 1' > /dev/null
           docker compose exec -T catalog-db psql -U catalog -d catalog -tc 'select 1' > /dev/null
-          echo "Las dos bases responden."
+          docker compose exec -T payments-db psql -U payments -d payments -tc 'select 1' > /dev/null
+          echo "Las tres bases responden."
       - name: Bajar el compose
         if: always()
         run: docker compose down -v
