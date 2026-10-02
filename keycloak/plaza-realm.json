@@ -1,0 +1,52 @@
+{
+  "realm": "plaza",
+  "displayName": "Plaza",
+  "enabled": true,
+  "accessTokenLifespan": 900,
+  "roles": {
+    "realm": [
+      {
+        "name": "customer",
+        "description": "Un cliente de Plaza: compra y ve sus propios pedidos"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "plaza-demo",
+      "name": "Plaza, la demo",
+      "description": "El cliente público de la demo: pide un token con usuario y contraseña desde curl o Postman",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": ["http://localhost:*"],
+      "webOrigins": ["+"]
+    }
+  ],
+  "users": [
+    {
+      "username": "ana",
+      "enabled": true,
+      "email": "ana@plaza.test",
+      "emailVerified": true,
+      "firstName": "Ana",
+      "lastName": "Quispe",
+      "realmRoles": ["customer"],
+      "credentials": [
+        { "type": "password", "value": "ana-local", "temporary": false }
+      ]
+    },
+    {
+      "username": "luis",
+      "enabled": true,
+      "email": "luis@plaza.test",
+      "emailVerified": true,
+      "firstName": "Luis",
+      "lastName": "Mamani",
+      "realmRoles": ["customer"],
+      "credentials": [
+        { "type": "password", "value": "luis-local", "temporary": false }
+      ]
+    }
+  ]
+}

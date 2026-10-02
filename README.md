@@ -59,7 +59,7 @@ Requiere Docker con Compose.
 docker compose up -d --wait
 ```
 
-Levanta una base Postgres por servicio con datos, en los puertos 5433, 5434 y 5435, y Vault en modo
+Levanta una base Postgres por servicio con datos, en los puertos 5433, 5434 y 5435, Keycloak y Vault en modo
 dev, con un secreto por servicio ya cargado:
 
 | Secreto en Vault | Claves |
@@ -70,6 +70,26 @@ dev, con un secreto por servicio ya cargado:
 
 Vault escucha en `http://localhost:8200`, y su token está en `.env.example`. Los valores son solo
 para esta máquina; para cambiarlos se copia `.env.example` a `.env`.
+
+### Iniciar sesión
+
+Keycloak escucha en `http://localhost:8180` e importa el realm `plaza` al arrancar, con el cliente
+público de la demo, `plaza-demo`, y dos clientes de prueba:
+
+| Usuario | Contraseña | Para qué |
+|---|---|---|
+| `ana` | `ana-local` | la compra de la demo |
+| `luis` | `luis-local` | mostrar que un cliente no ve los pedidos de otro |
+
+El token se pide así, y se manda al BFF en `Authorization: Bearer`:
+
+```bash
+curl -s -d grant_type=password -d client_id=plaza-demo -d username=ana -d password=ana-local \
+  http://localhost:8180/realms/plaza/protocol/openid-connect/token
+```
+
+La consola de administración está en `http://localhost:8180/admin`, con `admin` y la contraseña de
+`.env.example`. Igual que Vault, todo esto es solo para esta máquina.
 
 Las trazas, los logs y las métricas van al stack de observabilidad de
 [`nova-shared-03-infrastructure`](https://github.com/ahincho/nova-shared-03-infrastructure), que se
