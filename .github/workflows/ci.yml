@@ -17,8 +17,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - name: Validar el compose
         run: docker compose config --quiet
-      - name: Levantar las bases y Vault
+      - name: Levantar las bases, Vault, Keycloak y la mensajería
         run: docker compose up -d --wait
+      - name: Mostrar los logs de Kafka Connect si no arrancó
+        if: failure()
+        run: docker compose logs connect | tail -100
       - name: Comprobar que Vault guarda un secreto por servicio
         run: |
           for service in orders catalog payments; do
@@ -30,7 +33,52 @@ jobs:
           docker compose exec -T orders-db psql -U orders -d orders -tc 'select 1' > /dev/null
           docker compose exec -T catalog-db psql -U catalog -d catalog -tc 'select 1' > /dev/null
           docker compose exec -T payments-db psql -U payments -d payments -tc 'select 1' > /dev/null
-          echo "Las tres bases responden."
+          docker compose exec -T audit-db mongosh --quiet -u audit -p audit-local --authenticationDatabase admin \
+            --eval 'db.getSiblingDB("audit").runCommand({ping: 1}).ok' > /dev/null
+          docker compose exec -T vault vault kv get -field=MONGODB_URI secret/plaza/audit/mongo > /dev/null
+          echo "Las tres bases de Postgres y la de MongoDB responden, y Vault guarda la de la auditoría."
+      # El cable de ADR-048: una fila del outbox, insertada y borrada en la misma transacción como hace el
+      # starter, llega a plaza.orders con la clave del pedido, las cabeceras de CloudEvents y el payload intacto.
+      # La tabla es la que documenta nova-java-26-outbox; en pedidos la crea su migración.
+      - name: Comprobar que Debezium publica el outbox con el cable de CloudEvents
+        run: |
+          docker compose exec -T orders-db psql -U orders -d orders -v ON_ERROR_STOP=1 -q <<'SQL'
+          create table outbox (
+              id             uuid         primary key,
+              aggregate_type varchar(255) not null,
+              aggregate_id   varchar(255) not null,
+              type           varchar(255) not null,
+              source         varchar(255) not null,
+              time           timestamptz  not null,
+              payload        jsonb        not null,
+              traceparent    varchar(55),
+              tracestate     varchar(512),
+              specversion    varchar(10)  not null default '1.0'
+          );
+          begin;
+          insert into outbox (id, aggregate_type, aggregate_id, type, source, time, payload, traceparent, tracestate)
+              values ('6f1c1d2e-3b4a-4c5d-8e6f-7a8b9c0d1e2f', 'orders', 'order-1',
+              'pe.edu.nova.plaza.order.confirmed.v1', '/plaza/orders', now(), '{"orderId":"order-1"}',
+              '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01', null);
+          delete from outbox where id = '6f1c1d2e-3b4a-4c5d-8e6f-7a8b9c0d1e2f';
+          commit;
+          SQL
+          record=$(docker compose exec -T kafka /opt/kafka/bin/kafka-console-consumer.sh \
+            --bootstrap-server localhost:9092 --topic plaza.orders --from-beginning \
+            --max-messages 2 --timeout-ms 30000 \
+            --formatter-property print.key=true --formatter-property print.headers=true || true)
+          echo "$record"
+          test "$(grep -c . <<< "$record")" -eq 1 || { echo "::error::Se esperaba un solo registro"; exit 1; }
+          for expected in 'ce_id:6f1c1d2e-3b4a-4c5d-8e6f-7a8b9c0d1e2f' 'ce_specversion:1.0,' \
+              'ce_type:pe.edu.nova.plaza.order.confirmed.v1' 'ce_source:/plaza/orders' 'ce_subject:order-1' \
+              'content-type:application/json' \
+              'ce_traceparent:00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01' \
+              ',traceparent:00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01' \
+              "$(printf '\torder-1\t')" '"orderId"' '"order-1"'; do
+            grep -qF -- "$expected" <<< "$record" || { echo "::error::Falta $expected en el registro"; exit 1; }
+          done
+          if grep -q __debezium <<< "$record"; then echo "::error::Debezium agregó sus cabeceras de contexto"; exit 1; fi
+          echo "Debezium publicó el evento con la clave, las cabeceras y el payload, y el borrado no salió."
       # El BFF valida este token contra el JWKS del emisor: si el realm no se importó, o el emisor no es el
       # que el BFF espera, la compra entera responde 401.
       - name: Comprobar que Keycloak emite el token de un cliente de prueba
