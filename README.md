@@ -70,8 +70,8 @@ guardan juntos o no se guarda ninguno, y una caída de Kafka retrasa el evento e
 
 Un evento llega al menos una vez, así que los dos deduplican: el catálogo con el inbox de Nova, en la
 transacción que suma, y la auditoría con el id del evento como clave del documento. La traza viaja en
-el evento, así que Grafana muestra una sola traza del BFF a pedidos y de ahí al catálogo y a la
-auditoría.
+el evento, así que Grafana muestra una sola traza de pedidos al catálogo y a la auditoría. El BFF y
+pagos se suman a ella cuando el núcleo de NestJS propague `traceparent` (ADR-032); hoy no lo hace.
 
 ## Levantarlo en local
 
@@ -212,7 +212,8 @@ curl -s http://localhost:8080/v1/orders/$ORDER/history -H "Authorization: Bearer
 ```
 
 **10. Una sola traza** en Grafana (`http://localhost:3000`, Explore, Tempo): el `traceparent` del evento
-confirmado lleva a la traza de la compra, del BFF a pedidos, al catálogo y a la auditoría (ADR-032).
+confirmado lleva a la traza de la compra, de pedidos al catálogo y a la auditoría. El BFF y pagos todavía
+no exportan trazas (ADR-032).
 
 ## Estado
 
