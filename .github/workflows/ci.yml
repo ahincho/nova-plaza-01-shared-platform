@@ -52,10 +52,12 @@ jobs:
               time           timestamptz  not null,
               payload        jsonb        not null,
               traceparent    varchar(55),
-              tracestate     varchar(512)
+              tracestate     varchar(512),
+              specversion    varchar(10)  not null default '1.0'
           );
           begin;
-          insert into outbox values ('6f1c1d2e-3b4a-4c5d-8e6f-7a8b9c0d1e2f', 'orders', 'order-1',
+          insert into outbox (id, aggregate_type, aggregate_id, type, source, time, payload, traceparent, tracestate)
+              values ('6f1c1d2e-3b4a-4c5d-8e6f-7a8b9c0d1e2f', 'orders', 'order-1',
               'pe.edu.nova.plaza.order.confirmed.v1', '/plaza/orders', now(), '{"orderId":"order-1"}',
               '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01', null);
           delete from outbox where id = '6f1c1d2e-3b4a-4c5d-8e6f-7a8b9c0d1e2f';
