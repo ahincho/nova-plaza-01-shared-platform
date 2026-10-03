@@ -31,6 +31,19 @@ jobs:
           docker compose exec -T catalog-db psql -U catalog -d catalog -tc 'select 1' > /dev/null
           docker compose exec -T payments-db psql -U payments -d payments -tc 'select 1' > /dev/null
           echo "Las tres bases responden."
+      # El BFF valida este token contra el JWKS del emisor: si el realm no se importó, o el emisor no es el
+      # que el BFF espera, la compra entera responde 401.
+      - name: Comprobar que Keycloak emite el token de un cliente de prueba
+        run: |
+          token=$(curl --silent --fail \
+            --data grant_type=password --data client_id=plaza-demo \
+            --data username=ana --data password=ana-local \
+            http://localhost:8180/realms/plaza/protocol/openid-connect/token | jq -r .access_token)
+          # El cuerpo del JWT es base64url sin relleno; jq lo decodifica tras volverlo base64.
+          echo "$token" | jq -R -e 'split(".")[1] | gsub("-"; "+") | gsub("_"; "/") | @base64d | fromjson
+            | .iss == "http://localhost:8180/realms/plaza" and .preferred_username == "ana"' > /dev/null
+          echo "Keycloak emite el token de ana, con el emisor que espera el BFF."
+
       - name: Bajar el compose
         if: always()
         run: docker compose down -v
